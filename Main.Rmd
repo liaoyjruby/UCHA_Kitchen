@@ -1,0 +1,35 @@
+
+```{r setup}
+# Required packages
+library("googledrive") # https://googledrive.tidyverse.org/
+library("googlesheets4")
+
+# Make sure to authenticate Google account that's shared to the Kitchen Records folder
+googledrive::drive_auth()
+gs4_auth(token = drive_token())
+```
+
+```{r Clean copied data}
+records <- drive_ls(path = "Kitchen Records TEST")
+
+for (i in 1:nrow(records)){
+  origname <- records$name[i]
+  fixname <- gsub("Copy of ", "", origname)
+  drive_rename(file = as_id(records$id[i]), name = fixname, overwrite = T)
+}
+```
+
+```{r Filter}
+records <- records[grepl("Records", records$name),]
+records_CDF <- records[grepl("Records_Credit-Debit-Fine.csv", records$name),] # CDF = Credit_Debit_Fine
+records_signin <- records[grepl("Records.csv", records$name),] # Sheets with times
+```
+
+```{r Read 1 sheet}
+sheet <- records_signin[1,]
+
+sheet %>%
+  drive_read_string() %>%
+  read.csv(text = .)
+```
+
