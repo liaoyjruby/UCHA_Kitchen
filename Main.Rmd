@@ -12,11 +12,11 @@ gs4_auth(token = drive_token())
 ```{r Clean copied data}
 records <- drive_ls(path = "Kitchen Records TEST")
 
-for (i in 1:nrow(records)){
-  origname <- records$name[i]
-  fixname <- gsub("Copy of ", "", origname)
-  drive_rename(file = as_id(records$id[i]), name = fixname, overwrite = T)
-}
+# for (i in 1:nrow(records)){
+#   origname <- records$name[i]
+#   fixname <- gsub("Copy of ", "", origname)
+#   drive_rename(file = as_id(records$id[i]), name = fixname, overwrite = T)
+# }
 ```
 
 ```{r Filter}
@@ -28,7 +28,7 @@ records_signin <- records[grepl("Records.csv", records$name),] # Sheets with tim
 ```{r Read 1 sheet}
 sheet <- records_signin[1,]
 
-sheet %>%
+sheet1 <- sheet %>%
   drive_read_string() %>%
   read.csv(text = .)
 ```
