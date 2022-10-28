@@ -107,7 +107,7 @@ collect_month <- function(month_idx, year = 2022, KC = F, upload = F) {
       path = paste0("Kitchen_Summary/", out_title, ".csv"),
       overwrite = T
     )
-    write.table(month_sheet, file = paste0("tmp/", out_title, "_KC.csv"), sep = ",", quote = F, row.names = F)
+    write.table(month_sheet_KC, file = paste0("tmp/", out_title, "_KC.csv"), sep = ",", quote = F, row.names = F)
     drive_upload(
       paste0("tmp/", out_title, "_KC.csv"),
       path = paste0("Kitchen_Summary/", out_title, "_KC.csv"),
