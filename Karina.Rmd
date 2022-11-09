@@ -20,12 +20,12 @@ gs4_auth(token = drive_token())
 # Comment this out when running whole code; only need to comment it back if/when
 # 'Roster' spreadsheet is updated
 
-drive_download(
-  as_id("https://docs.google.com/spreadsheets/d/1EIrRxF9gXLocFEEx5_ldjCIcuvDoXBfw/edit#gid=57217781",
-        path = "KC Planning.xlsx",
-        overwrite = TRUE,
-        type = "xlsx")
-)
+# drive_download(
+#   as_id("https://docs.google.com/spreadsheets/d/1EIrRxF9gXLocFEEx5_ldjCIcuvDoXBfw/edit#gid=57217781",
+#         path = "KC Planning.xlsx",
+#         overwrite = TRUE,
+#         type = "xlsx")
+# )
 
 # Read in roster of all KC's
 KC_roster <- read_xlsx("KC Planning.xlsx", sheet = "Roster")
@@ -43,51 +43,42 @@ KCs <- KC_roster[grep("3", KC_roster$Role), 1:3]
 KC_current <- rbind(KCC, AKCC, KCs)
 KC_current
 
+# Overall roster of KCs both former and past plus deep cleaning
+roster <- KC_roster[, 1:3]
+
 # All names of current KCs
 # Might be a problem with KCs who go by another name
 # Will pull all KCs' first names, it would help if KCs who go by another name
 # were the only ones with parentheses in their names
+KC_names <- c()
 
-# NEED TO FIX THIS!!!!!
-KC_name <- NA
-
-for (i in nrow(KC_current)) {
+for (i in 1:nrow(KC_current)) {
   
   # Account for KCs with other names
   if (str_detect(KC_current[i, 2], "\\(") == TRUE) {
-    
+
     # Split name into separate characters
     name <- str_split(KC_current[i, 2], " ")
-    
+
     # Extract character with parenthesis
     name <- name[[1]][str_detect(name[[1]], "\\(") == TRUE]
-    
+
     # Remove parenthesis by splitting character, and extract name
-    name <- str_split(name, "[\\W]")[[1]][2]
-    
-    # NEED TO FIX THIS!!!!!
-    KC_name <- c(KC_name, name)
+    first_name <- str_split(name, "[\\W]")[[1]][2]
+
   } else {
     # Split name into separate characters
     name <- str_split(KC_current[i, 2], " ")
     
     # Extract only first name
     first_name <- name[[1]][1]
-    
-    # NEED TO FIX THIS!!!!!
-    KC_name <- c(KC_name, first_name)
   }
   
-  # print(KC_name)
+  KC_names <- c(KC_names, first_name)
 }
 
-
-# FIX THE NAME OUTPUT LATER TODAY!!!!!
-print(KC_name)
-
-
-# Names of KCs with parentheses
-# KC_current[str_detect(KC_current$Name, "\\(") == TRUE, 2]
+# Names of KCs according to the schedule
+KC_names
 ```
 
 ```{r Filter}
@@ -96,6 +87,7 @@ records <- records[grepl("Records", records$name),]
 records_CDF <- records[grepl("Records_Credit-Debit-Fine.csv", records$name),] # CDF = Credit_Debit_Fine
 records_SI <- records[grepl("Records.csv", records$name),] # Sheets with times
 ```
+
 ```{r Clean sheets}
 
 records <- drive_ls(path = "Kitchen Records TEST")
@@ -117,8 +109,46 @@ sheet1 <- sheet %>%
   drive_read_string() %>%
   read.csv(text = .)
 
-sheet1 %>%
-  select()
+##################################################################
+################# Preparing Data to Analyse Time #################
+##################################################################
+
+# Pattern used for grouping and capturing day
+pattern_date <- "(\\d{8})"
+# Get the day from the 'Identifier' variable
+sheet_date <- str_match(sheet1$identifier, pattern_date)[1, 1]
+# Convert times from chars to time variables
+# First adding date to all time chars
+for(i in 1:length(sheet1$identifier)) {
+  # Start/end shift times
+  sheet1$startTime[i] <- paste(sheet_date, sheet1$startTime[i])
+  sheet1$endTime[i] <- paste(sheet_date, sheet1$endTime[i])
+  
+  # It does not make sense to append date to no-shows
+  if (sheet1$signed.[i] != "false") {
+    # Time logged in/out of shift
+    sheet1$signInTime[i] <- paste(sheet_date, sheet1$signInTime[i])
+    sheet1$signOutTime[i] <- paste(sheet_date, sheet1$signOutTime[i])
+    
+    # It does not make sense to append date when no break was taken
+    if (is.na(sheet1$Duration[i]) != TRUE) {
+      # Start/end break times
+      sheet1$breakInTime[i] <- paste(sheet_date, sheet1$breakInTime[i])
+      sheet1$breakoutTime[i] <- paste(sheet_date, sheet1$breakoutTime[i])
+    }
+  }
+}
+
+# Finally convert all time cols to POSIXct's
+# Note: Missing times will turn into NA's
+sheet1$startTime <- as.POSIXct(sheet1$startTime, format = "%Y%m%d %H:%M")
+sheet1$endTime <- as.POSIXct(sheet1$endTime, format = "%Y%m%d %H:%M")
+sheet1$signInTime <- as.POSIXct(sheet1$signInTime, format = "%Y%m%d %H:%M")
+sheet1$signOutTime <- as.POSIXct(sheet1$signOutTime, format = "%Y%m%d %H:%M")
+sheet1$breakInTime <- as.POSIXct(sheet1$breakInTime, format = "%Y%m%d %H:%M")
+sheet1$breakoutTime <- as.POSIXct(sheet1$breakoutTime, format = "%Y%m%d %H:%M")
+
+sheet1
 ```
 
 
