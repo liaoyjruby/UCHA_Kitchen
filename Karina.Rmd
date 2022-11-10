@@ -13,6 +13,7 @@ googledrive::drive_auth()
 gs4_auth(token = drive_token())
 ```
 
+
 ```{r Roster}
 # Download KC roster locally
 # Was not able to read in xlsx file without downloading it :/
@@ -32,17 +33,14 @@ KC_roster <- read_xlsx("KC Planning.xlsx", sheet = "Roster")
 
 # Get current KCC
 KCC <- KC_roster[grep("1", KC_roster$Role), 1:3]
-
 # Get current AKCC(s)
 AKCC <- KC_roster[grep("2", KC_roster$Role), 1:3]
-
 # Get all other KCs
 KCs <- KC_roster[grep("3", KC_roster$Role), 1:3]
 
 # All current / permanent KCs
 KC_current <- rbind(KCC, AKCC, KCs)
 KC_current
-
 # Overall roster of KCs both former and past plus deep cleaning
 roster <- KC_roster[, 1:3]
 
@@ -56,24 +54,19 @@ for (i in 1:nrow(KC_current)) {
   
   # Account for KCs with other names
   if (str_detect(KC_current[i, 2], "\\(") == TRUE) {
-
     # Split name into separate characters
     name <- str_split(KC_current[i, 2], " ")
-
     # Extract character with parenthesis
     name <- name[[1]][str_detect(name[[1]], "\\(") == TRUE]
-
     # Remove parenthesis by splitting character, and extract name
     first_name <- str_split(name, "[\\W]")[[1]][2]
 
   } else {
     # Split name into separate characters
     name <- str_split(KC_current[i, 2], " ")
-    
     # Extract only first name
     first_name <- name[[1]][1]
   }
-  
   KC_names <- c(KC_names, first_name)
 }
 
@@ -81,12 +74,14 @@ for (i in 1:nrow(KC_current)) {
 KC_names
 ```
 
+
 ```{r Filter}
 records <- drive_ls(path = "Kitchen Records TEST")
 records <- records[grepl("Records", records$name),]
 records_CDF <- records[grepl("Records_Credit-Debit-Fine.csv", records$name),] # CDF = Credit_Debit_Fine
 records_SI <- records[grepl("Records.csv", records$name),] # Sheets with times
 ```
+
 
 ```{r Clean sheets}
 
@@ -103,7 +98,7 @@ for (i in 1:nrow(records)){
 
 
 ```{r Read 1 sheet}
-sheet <- records_SI[1,]
+sheet <- records_SI[11, ]
 
 sheet1 <- sheet %>%
   drive_read_string() %>%
@@ -148,7 +143,69 @@ sheet1$signOutTime <- as.POSIXct(sheet1$signOutTime, format = "%Y%m%d %H:%M")
 sheet1$breakInTime <- as.POSIXct(sheet1$breakInTime, format = "%Y%m%d %H:%M")
 sheet1$breakoutTime <- as.POSIXct(sheet1$breakoutTime, format = "%Y%m%d %H:%M")
 
+# View sheet with appropriate time variables
+# We can always extract only our calculations and append
+# them to original sheet for aesthetic purposes
 sheet1
+
+# Total length of shift
+# 4-hour shifts should be around 220mins (counting the break)
+shift_length <- if_else(difftime(sheet1$endTime, sheet1$startTime,
+                                 units = "mins") >= 240,
+                        difftime(sheet1$endTime, sheet1$startTime,
+                                 units = "mins") - 20,
+                        difftime(sheet1$endTime, sheet1$startTime,
+                                 units = "mins"))
+
+# Set late threshold to 15 mins
+# 15 x 60 = 900secs
+late_mins <- sheet1$startTime + 900
+
+# Gather information about workers
+# Were they late? How late? Did they take a long break? Did they leave early?
+sheet2 <- sheet1 %>% 
+  # Deselect columns we don't need
+  select(-identifier, -room, -shiftType, -assigned.by,
+         -signed., -(checked.:notes)) %>% 
+  mutate(
+    # Determine who was more than 15mins late
+    # Want to have a check for workers who began at 5pm
+    late = if_else((str_detect(startTime, "17") != TRUE) &
+                      late_mins < signInTime, "Late",
+                   if_else((str_detect(startTime, "17") == TRUE) &
+                      late_mins + 1200 < signInTime, "Late", "On Time")),
+    # Calculate how many mins worker was late
+    # Have a late check for workers who began at 5pm
+    total_mins_late = if_else((late == "Late") & (is.na(late) != TRUE) &
+                                str_detect(startTime, "17") != TRUE,
+                              difftime(signInTime, late_mins, units = "mins"),
+                         if_else((late == "Late") &
+                                   str_detect(startTime, "17") == TRUE,
+                                 difftime(signInTime, late_mins,
+                                          units = "mins") - 20, 0)),
+    # Calculate how long shift was worked
+    # This is calculated assuming they took a 20min break
+    # However, it would be better to replace the 20 with 'Duration',
+    # and fix it to a 20min break if greater than 40mins?
+    # Having a break longer than 70mins is unrealistic, and so is having a
+    # shift longer than 4 hours?
+    # If worker forgot to end break, then perhaps it was caught when they
+    # signed out, or did they also forget to sign out?
+    worked = if_else((is.na(signInTime) == FALSE) &
+                             (is.na(breakInTime) == FALSE),
+                     # Subtract the 20min break
+                     difftime(signOutTime, signInTime, units = "mins") - 20,
+                     if_else(is.na(signInTime) == FALSE,
+                             difftime(signOutTime, signInTime,
+                                      units = "mins"), 0)),
+    # Calculate how early worker left
+    # Keep in mind that 5pm workers should have left at around a similar time
+    left_early = if_else(is.na(signInTime) == FALSE & shift_length > worked,
+                         shift_length - worked, 0)
+    )
+
+# View changes
+sheet2
 ```
 
 
