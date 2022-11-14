@@ -98,7 +98,7 @@ for (i in 1:nrow(records)){
 
 
 ```{r Read 1 sheet}
-sheet <- records_SI[11, ]
+sheet <- records_SI[1, ]
 
 sheet1 <- sheet %>%
   drive_read_string() %>%
@@ -125,11 +125,11 @@ for(i in 1:length(sheet1$identifier)) {
     sheet1$signInTime[i] <- paste(sheet_date, sheet1$signInTime[i])
     sheet1$signOutTime[i] <- paste(sheet_date, sheet1$signOutTime[i])
     
-    # It does not make sense to append date when no break was taken
-    if (is.na(sheet1$Duration[i]) != TRUE) {
-      # Start/end break times
-      sheet1$breakInTime[i] <- paste(sheet_date, sheet1$breakInTime[i])
-      sheet1$breakoutTime[i] <- paste(sheet_date, sheet1$breakoutTime[i])
+  # It does not make sense to append date when no break was taken
+  if (is.na(sheet1$Duration[i]) != TRUE) {
+    # Start/end break times
+    sheet1$breakInTime[i] <- paste(sheet_date, sheet1$breakInTime[i])
+    sheet1$breakoutTime[i] <- paste(sheet_date, sheet1$breakoutTime[i])
     }
   }
 }
@@ -161,6 +161,26 @@ shift_length <- if_else(difftime(sheet1$endTime, sheet1$startTime,
 # 15 x 60 = 900secs
 late_mins <- sheet1$startTime + 900
 
+# If there is a time difference of more than 10 mins between break in
+# time and sign out time, then we will assume that the worker did not
+# forget to break in and did indeed take a very long break
+break_diff <- difftime(sheet1$signOutTime, sheet1$breakInTime, units = "mins")
+
+# If worker forgot to end break, then perhaps it was caught when they
+# signed out, so we have to account for the possibility of this by replacing
+# these outliers with 20 min breaks
+sheet1$Duration[which(break_diff < 10)] <- 20
+
+# If there is a time difference of more than an hour between sign out time
+# and the shift's end time, then we will assume that the worker forgot to
+# sign out
+sign_out_diff <- difftime(sheet1$signOutTime, sheet1$endTime, units = "mins")
+
+# It does not make sense for workers or KC's to have stayed longer than an
+# hour past their shift, so we will account for these outliers
+sheet1$signOutTime[which(sign_out_diff > 60)] <-
+  shift_length[which(sign_out_diff > 60)]
+
 # Gather information about workers
 # Were they late? How late? Did they take a long break? Did they leave early?
 sheet2 <- sheet1 %>% 
@@ -184,17 +204,10 @@ sheet2 <- sheet1 %>%
                                  difftime(signInTime, late_mins,
                                           units = "mins") - 20, 0)),
     # Calculate how long shift was worked
-    # This is calculated assuming they took a 20min break
-    # However, it would be better to replace the 20 with 'Duration',
-    # and fix it to a 20min break if greater than 40mins?
-    # Having a break longer than 70mins is unrealistic, and so is having a
-    # shift longer than 4 hours?
-    # If worker forgot to end break, then perhaps it was caught when they
-    # signed out, or did they also forget to sign out?
     worked = if_else((is.na(signInTime) == FALSE) &
                              (is.na(breakInTime) == FALSE),
-                     # Subtract the 20min break
-                     difftime(signOutTime, signInTime, units = "mins") - 20,
+                     # Subtract the workers' breaks
+                     difftime(signOutTime, signInTime, units = "mins") - Duration,
                      if_else(is.na(signInTime) == FALSE,
                              difftime(signOutTime, signInTime,
                                       units = "mins"), 0)),
