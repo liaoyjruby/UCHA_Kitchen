@@ -152,6 +152,15 @@ for (i in 1:nrow(records_summary_all)){
 head(all_records)
 ```
 
+```{r Get KC Roster}
+KC_path <- drive_get(path = "KC Planning.xlsx")
+dir.create("tmp/")
+drive_download(KC_path, path = "tmp/KC_Roster.xlsx", overwrite = T)
+KC_roster <- readxl::read_excel("tmp/KC_Roster.xlsx", sheet = "Roster")
+unlink("tmp/", recursive = T)
+```
+
+
 
 
 
