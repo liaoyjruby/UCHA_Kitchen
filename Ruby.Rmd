@@ -18,7 +18,6 @@ records_CDF <- records[grepl("Records_Credit-Debit-Fine.csv", records$name),] # 
 records_SI <- records[grepl("Records.csv", records$name),] # Sheets with times
 ```
 ```{r Clean sheets}
-
 records <- drive_ls(path = "Kitchen Records TEST")
 
 for (i in 1:nrow(records)){
@@ -132,6 +131,27 @@ for (idx in month_idxs){
 }
 
 ```
+
+# Summary sheets
+```{r Load summary sheets}
+records_summary <- drive_ls(path = "Kitchen_Summary")
+records_summary_KC <- records_summary[grepl("Records_KC", records_summary$name),]
+records_summary_all <- records_summary[grepl("Records\\.", records_summary$name),]
+
+all_records <- data.frame()
+# sheet <- records_SI[1,]
+
+for (i in 1:nrow(records_summary_all)){
+  entry <- records_summary_all[i,]
+  sheet <- entry %>%
+    drive_read_string() %>%
+    read.csv(text = .)
+  all_records <- rbind(all_sheets, sheet)
+}
+
+head(all_records)
+```
+
 
 
 
